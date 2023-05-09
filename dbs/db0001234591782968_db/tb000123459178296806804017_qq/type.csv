@@ -1,0 +1,4 @@
+_name_,_type_,_check_,_default_,_primary_,_unique_,_not null_,_foreign key_
+id,int,,,False,False,False,
+name,string,,,False,False,True,
+address,string,,,False,False,False,

@@ -1,0 +1,4 @@
+name,type,check,default,primary,unique,not null,tbtb(tb)
+id,int,,,True,True,True,
+name,string,,,False,False,False,tbtb(tb)
+omy,string,,,False,False,False,
