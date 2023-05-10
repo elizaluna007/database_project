@@ -1,2 +1,0 @@
-name,type,check,default,primary,unique,not null,foreign key
-id,int,,,False,False,False,

@@ -4,6 +4,7 @@ import re
 import os
 import csv
 import json
+from datetime import datetime
 
 
 def split_string_with_delimiters(string):
@@ -24,6 +25,124 @@ def split_string_with_delimiters(string):
     if (current_str != ""):
         result.append(current_str)
     return result
+
+
+def is_binary_string(s):
+    try:
+        # 尝试将字符串解码为二进制数据
+        s.encode('latin1')
+        # 如果解码成功，且字符串只包含0和1，则判断为二进制字符串
+        return all(c in '01' for c in s)
+    except UnicodeEncodeError:
+        # 解码失败，不是二进制字符串
+        return False
+
+
+def is_date(date_string, date_range=["1000-01-01", "9999-12-31"]):
+    try:
+        # 检查日期范围是否满足要求
+        start_date = datetime.strptime(date_range[0], "%Y-%m-%d")
+        end_date = datetime.strptime(date_range[1], "%Y-%m-%d")
+        target_date = datetime.strptime(date_string, "%Y-%m-%d")
+
+        if start_date <= target_date <= end_date:
+            return True
+        else:
+            return False
+    except ValueError:
+        # 解析日期出错，不满足要求的字符串
+        return False
+
+
+def is_time(time_string, time_range=["-838:59:59", "838:59:59"]):
+    try:
+        # 解析时间范围
+        start_time = time_range[0]
+        end_time = time_range[1]
+
+        # 解析目标时间
+        target_time = time_string
+
+        # 检查时间格式是否满足要求
+        if not all(x.isdigit() for x in target_time.split(":")):
+            return False
+
+        # 分割时间字符串为小时、分钟和秒钟
+        target_hour, target_minute, target_second = map(
+            int, target_time.split(":"))
+
+        # 检查分钟和秒钟是否在有效范围内
+        if not (0 <= target_minute <= 59 and 0 <= target_second <= 59):
+            return False
+
+        # 处理负数时间的情况
+        if start_time.startswith("-") or end_time.startswith("-"):
+            # 将时间转换为秒数进行比较
+            start_seconds = sum(int(x) * 60**i for i,
+                                x in enumerate(reversed(start_time.split(":"))))
+            end_seconds = sum(int(x) * 60**i for i,
+                              x in enumerate(reversed(end_time.split(":"))))
+            target_seconds = target_hour * 3600 + target_minute * 60 + target_second
+
+            if start_seconds <= target_seconds <= end_seconds:
+                return True
+            else:
+                return False
+        else:
+            # 解析时间范围为小时、分钟和秒钟
+            start_hour, start_minute, start_second = map(
+                int, start_time.split(":"))
+            end_hour, end_minute, end_second = map(int, end_time.split(":"))
+
+            # 检查时间是否在范围内
+            if (
+                start_hour <= target_hour <= end_hour
+                and start_minute <= target_minute <= end_minute
+                and start_second <= target_second <= end_second
+            ):
+                return True
+            else:
+                return False
+    except ValueError:
+        # 解析时间出错，不满足要求的字符串
+        return False
+
+
+def is_year(year_string):
+    if (year_string >= "1901" and year_string <= "2155"):
+        return True
+    else:
+        return False
+
+
+def is_datetime(datetime_string):
+    datetime = datetime_string.split(" ")
+    if (len(datetime) != 2):
+        return False
+    else:
+        date_part = datetime[0]
+        time_part = datetime[1]
+        date_range = ["1000-01-01", "9999-12-31"]
+        time_range = ["0:0:0", "23:59:59"]
+        if (is_date(date_part, date_range) and is_time(time_part, time_range)):
+            return True
+        else:
+            return False
+
+
+def is_timestamp(timestamp_string):
+    datetime = timestamp_string.split(" ")
+    if (len(datetime) != 2):
+        return False
+    else:
+        date_part = datetime[0]
+        time_part = datetime[1]
+        date_range = ["1970-01-01", "2038-1-19"]
+        time_range = ["0:0:0", "23:59:59"]
+        if (is_date(date_part, date_range) and is_time(time_part, time_range)):
+            return True
+        else:
+            return False
 
 
 class Database:
@@ -166,10 +285,16 @@ class Database:
         # 创建数据库
         elif (small_strings[0] == "create" and small_strings[1] == "database"):
             self.database_name = small_strings[2]
-            self.create_database()
+            if (self.is_sure_key(small_strings[2])):
+                print("该数据库名称与关键词重合，创建数据库失败")
+            else:
+                self.create_database()
         # 创建数据表
         elif (small_strings[0] == "create" and small_strings[1] == "table"):
-            self.create_table(small_strings)
+            if (self.is_sure_key(small_strings[2])):
+                print("该数据表名称与关键词重合，创建数据表失败")
+            else:
+                self.create_table(small_strings)
 
         # 插入数据
         elif (small_strings[0] == "insert" and small_strings[1] == "into"):
@@ -180,12 +305,27 @@ class Database:
         else:
             print("该指令非法")
 
+    def is_sure_key(self, str):
+        metadata = ['_admin_ID_', '_admin_name_', '_password_', '_database_ID_',
+                    '_database_name_', '_database_admin_ID_', '_table_ID_', '_table_name_', '_database_ID_']
+        type = ["_name_", "_type_", "_check_", "_default_",
+                "_primary key_", "_unique_", "_not null_", "_foreign key_"]
+        num_type = ['tinyint', 'smallint', 'mediumint',
+                    'int', 'bigint', 'float', 'double']
+        str_type = ['char', 'varchar', 'tinyblob', 'tinytext',
+                    'blob', 'text', 'mediumblob', 'mediumtext', 'longblob', 'longtext']
+        time_type = ['date', 'time', 'year', 'datetime', 'timestamp']
+        if str in metadata or str in type or str in num_type or str in str_type or str in time_type:
+            return True
+        else:
+            return False
+
     def insert_data(self, small_strings):
         table_name = small_strings[2]
         if (self.is_sure_table_by_database_ID(table_name)):
             self.insert_dt(table_name, small_strings)
         else:
-            print("该数据表名称非法,插入数据失败")
+            print("该数据表不存在,插入数据失败")
 
     def insert_dt(self, table_name, small_strings):
         file_name_type = "dbs/{}_{}/{}_{}/type.csv".format(
@@ -204,9 +344,6 @@ class Database:
             for row in reader:
                 data.append(row)
 
-        print(data_type)
-        print(data)
-
         data_insert_name = []
         data_insert_data = []
         i = 4
@@ -223,8 +360,7 @@ class Database:
                 key = 1
             else:
                 i = i+1
-        print(data_insert_name)
-        print(data_insert_data)
+
         result = ["" for i in range(len(data[0]))]
         key = 1
         for i in range(len(data_insert_data)):
@@ -232,18 +368,157 @@ class Database:
                 data_type, data, data_insert_name[i], data_insert_data[i])
             key = key and b
             result[n] = data_insert_data[i]
+        result = [result]
         if (b):
-            print("插入")
+            with open(file_name_data, 'a', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerows(result)
         else:
             print("数据有误")
+
+    # 检查类型与数值是否匹配
+    def check(self, type, data):
+        # num类型的值的范围在type文件夹下的num.json中，对其进行检查
+        if (type == "tinyint"):
+            if (int(data) >= -128 and int(data) <= 127):
+                return True
+            else:
+                return False
+        elif (type == "smallint"):
+            if (int(data) >= -32768 and int(data) <= 32767):
+                return True
+            else:
+                return False
+        elif (type == "mediumint"):
+            if (int(data) >= -8388608 and int(data) <= 8388607):
+                return True
+            else:
+                return False
+        elif (type == "int"):
+            if (int(data) >= -2147483648 and int(data) <= 2147483647):
+                return True
+            else:
+                return False
+        elif (type == "bigint"):
+            if (int(data) >= -9223372036854775808 and int(data) <= 9223372036854775807):
+                return True
+            else:
+                return False
+        elif (type == "float"):
+            if (float(data) >= -3.402823466E+38 and float(data) <= 3.402823466E+38):
+                return True
+            else:
+                return False
+        elif (type == "double"):
+            if (float(data) >= -1.7976931348623157E+308 and float(data) <= 1.7976931348623157E+308):
+                return True
+            else:
+                return False
+        # str类型的值的范围在type文件夹下的str.json中，对其进行检查
+        elif (type == "char"):
+            if (len(data) <= 255):
+                return True
+            else:
+                return False
+        elif (type == "varchar"):
+            if (len(data) <= 65535):
+                return True
+            else:
+                return False
+        elif (type == "tinyblob"):
+            if (len(data) <= 255 and is_binary_string(data)):
+                return True
+            else:
+                return False
+        elif (type == "tinytext"):
+            if (len(data) <= 255):
+                return True
+            else:
+                return False
+        elif (type == "blob"):
+            if (len(data) <= 65535 and is_binary_string(data)):
+                return True
+            else:
+                return False
+        elif (type == "text"):
+            if (len(data) <= 65535):
+                return True
+            else:
+                return False
+        elif (type == "mediumblob"):
+            if (len(data) <= 16777215 and is_binary_string(data)):
+                return True
+            else:
+                return False
+        elif (type == "mediumtext"):
+            if (len(data) <= 16777215):
+                return True
+            else:
+                return False
+        elif (type == "longblob"):
+            if (len(data) <= 4294967295 and is_binary_string(data)):
+                return True
+            else:
+                return False
+        elif (type == "longtext"):
+            if (len(data) <= 4294967295):
+                return True
+        # time类型的值的范围在type文件夹下的time.json中，对其进行检查
+        elif (type == "date"):
+            if (is_date(data)):
+                return True
+            else:
+                return False
+        elif (type == "time"):
+            if (is_time(data)):
+                return True
+            else:
+                return False
+        elif (type == "year"):
+            if (is_year(data)):
+                return True
+            else:
+                return False
+        elif (type == "datetime"):
+            if (is_datetime(data)):
+                return True
+            else:
+                return False
+        elif (type == "timestamp"):
+            if (is_timestamp(data)):
+                return True
+            else:
+                return False
+        else:
+            #id char(num)
+            if(type[:4]=="char"):
+                num=type[5:]
+                return True
+            else:
+                return False
 
     def insert_dt_select(self, type, data, name_now, data_now):
         key = 1
         # i是该数据的位置
+        key_key = 0
         for i in range(len(type)):
             if (type[i][0] == name_now):
+                key_key = 1
                 break
-        print("index is ", i)
+        if (key_key == 0):
+            key = 0
+            print("属性名 {name_now} 不存在,插入数据失败".format(name_now=name_now))
+
+        # type
+        if (self.check(type[i][1], data_now) == False):
+            key = 0
+            print("数据类型不匹配,插入数据失败")
+        if(type[:4]=="char"):
+            num=int(type[5:])
+            if(len(data_now)!=num):
+                key=0
+                print("数据类型不匹配,插入数据失败")
+
         # check
         if (type[i][2] != ""):
             print(type[i][2])
@@ -253,20 +528,78 @@ class Database:
             for j in data:
                 if (j[i-1] == data_now):
                     key = 0
+                    print("{data_now}已存在,插入数据失败".format(data_now=data_now))
         # unique
         if (type[i][5] == True):
             for j in data:
                 if (j[i-1] == data_now):
                     key = 0
+                    print("{data_now}已存在,插入数据失败".format(data_now=data_now))
         # foreign key
         if (type[i][7] != ""):
-            print(type[i][7])
+            # 使用正则表达式提取主要名称和附加名称
+            pattern = r'^(.*?)\((.*?)\)$'
+            match = re.match(pattern, type[i][7])
+            main_name = match.group(1)
+            additional_name = match.group(2)
+            if (self.is_sure_table_by_database_ID(main_name)):  # 存在该数据表
+                if (self.is_sure_name_by_table_ID(main_name, additional_name)):  # 存在该外键
+                    file_name = "dbs/{}_{}/{}_{}/data.csv".format(
+                        self.database_ID, self.database_name, self.table_ID, main_name)
+                    data = []
+                    with open(file_name, 'r') as file:
+                        reader = csv.reader(file)
+                        for row in reader:
+                            data.append(row)
+                    for i in range(len(data[0])):
+                        if (data[0][i] == additional_name):
+                            break
+                    key_key = 0
+                    for j in data:
+                        if (j[i] == data_now):
+                            key_key = 1
+                            break
+                    if (key_key == 0):
+                        print(
+                            "数据表 {main_name} 不存在外键 {additional_name} 的值 {data_now} ,插入数据失败".format(main_name=main_name, additional_name=additional_name, data_now=data_now))
+                    else:
+                        key = 1
+                else:
+                    print("数据表 {main_name} 不存在外键 {additional_name} ,插入数据失败".format(
+                        main_name=main_name, additional_name=additional_name))
+                    key = 0
+            else:
+                print("数据表 {main_name} 不存在,插入数据失败".format(main_name=main_name))
+                key = 0
+
         return key, i-1
+
+    def is_sure_name_by_table_ID(self, main_name, additional_name):
+        # 判断当前数据库ID下的数据库内是否已经存在当前数据表
+        # 检查第0列是否存在和整数类型的account相等的值
+        column_index = 2  # 第0列的索引（从0开始）
+        # 检查第2列是否存在和整数类型的account相等的值
+        column_exists = self.dataframe_3.iloc[:,
+                                              column_index] == self.database_ID
+        if column_exists.any():
+            row_indices = column_exists[column_exists].index.tolist(
+            )
+            # 验证该行的第1个数是否是database_name
+            value_column_index = 1  # 第1列的索引（从0开始）
+            rows_with_value = self.dataframe_3.iloc[row_indices,
+                                                    value_column_index] == main_name
+            for i in range(len(rows_with_value.tolist())):
+                if (rows_with_value.tolist()[i] == True):
+                    self.table_ID = self.dataframe_3.iloc[row_indices[i], 0]
+                    return True
+        return False
 
     def create_table(self, small_strings):
         table_name = small_strings[2]
-        if (self.is_sure_table_by_database_ID(table_name)):
-            print("该数据表名称非法,创建数据表失败")
+        if (table_name == "("):
+            print("指令非法,创建数据表失败")
+        elif (self.is_sure_table_by_database_ID(table_name)):
+            print("该数据表名称已存在,创建数据表失败")
         else:
             self.create_tb(table_name, small_strings)
 
@@ -377,10 +710,17 @@ class Database:
                             i = i+2
 
                     else:
-                        print(small_strings[i])
-                        r = [name, type, "", "", False, False, False, ""]
-                        result.append(r)
-                        i = i+2
+                        # id char(num)
+                        if (type == "char"):
+                            num = small_strings[i+3]
+                            type = type+"_"+num
+                            r = [name, type, "", "", False, False, False, ""]
+                            result.append(r)
+                            i = i+5
+                        else:
+                            r = [name, type, "", "", False, False, False, ""]
+                            result.append(r)
+                            i = i+2
                 else:
                     if (small_strings[i] == "(" or small_strings[i] == ")"):
                         i = i+1
@@ -399,7 +739,6 @@ class Database:
             result_data = []
             for i in result[1:]:
                 result_data.append(i[0])
-            print(result_data)
             result_data = [result_data]
             file_name = "dbs/{}_{}/{}_{}/data.csv".format(
                 self.database_ID, self.database_name, id, table_name)
