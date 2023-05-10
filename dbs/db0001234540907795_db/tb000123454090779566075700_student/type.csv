@@ -1,0 +1,4 @@
+_name_,_type_,_check_,_default_,_primary key_,_unique_,_not null_,_foreign key_
+id,int,id<0andid>100,,True,True,True,
+name,varchar,,,False,False,False,
+address,varchar,,school,False,False,False,address(address)

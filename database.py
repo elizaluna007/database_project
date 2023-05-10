@@ -316,9 +316,11 @@ class Database:
                     'blob', 'text', 'mediumblob', 'mediumtext', 'longblob', 'longtext']
         time_type = ['date', 'time', 'year', 'datetime', 'timestamp']
         if str in metadata or str in type or str in num_type or str in str_type or str in time_type:
-            return True
+            if str in num_type or str in str_type or str in time_type:
+                return 2
+            return 1
         else:
-            return False
+            return 0
 
     def insert_data(self, small_strings):
         table_name = small_strings[2]
@@ -368,15 +370,38 @@ class Database:
                 data_type, data, data_insert_name[i], data_insert_data[i])
             key = key and b
             result[n] = data_insert_data[i]
+
+        # 判断not null
+        b = self.check_not_null(result, data_type)  # 判断是否为空
+        key = key and b
+        #默认值赋值
+        result=self.check_default(result, data_type)
+
         result = [result]
-        if (b):
+        if (key):
             with open(file_name_data, 'a', newline='') as file:
                 writer = csv.writer(file)
                 writer.writerows(result)
+            result=result[0]
+            print("成功插入数据",result)
         else:
             print("数据有误")
-
+            
+    def check_default(self, result, data_type):
+        for i in range(len(data_type[1:])):
+            if (data_type[i+1][3] != ""):
+                if(result[i]==""):
+                    result[i] = data_type[i+1][3]
+        return result
+                
+    def check_not_null(self, result, data_type):
+        for i in range(len(data_type[1:])):
+            if (data_type[i+1][6] == "True"):
+                if(result[i]==""):
+                    return False
+        return True
     # 检查类型与数值是否匹配
+
     def check(self, type, data):
         # num类型的值的范围在type文件夹下的num.json中，对其进行检查
         if (type == "tinyint"):
@@ -490,9 +515,9 @@ class Database:
             else:
                 return False
         else:
-            #id char(num)
-            if(type[:4]=="char"):
-                num=type[5:]
+            # id char(num)
+            if (type[:4] == "char"):
+                num = type[5:]
                 return True
             else:
                 return False
@@ -513,15 +538,15 @@ class Database:
         if (self.check(type[i][1], data_now) == False):
             key = 0
             print("数据类型不匹配,插入数据失败")
-        if(type[:4]=="char"):
-            num=int(type[5:])
-            if(len(data_now)!=num):
-                key=0
+        if (type[:4] == "char"):
+            num = int(type[5:])
+            if (len(data_now) != num):
+                key = 0
                 print("数据类型不匹配,插入数据失败")
 
         # check
-        if (type[i][2] != ""):
-            print(type[i][2])
+        # if (type[i][2] != ""):
+            #todo
 
         # primary key
         if (type[i][4] == True):
@@ -551,19 +576,19 @@ class Database:
                         reader = csv.reader(file)
                         for row in reader:
                             data.append(row)
-                    for i in range(len(data[0])):
-                        if (data[0][i] == additional_name):
+                    for q in range(len(data[0])):
+                        if (data[0][q] == additional_name):
                             break
                     key_key = 0
                     for j in data:
-                        if (j[i] == data_now):
+                        if (j[q] == data_now):
                             key_key = 1
                             break
                     if (key_key == 0):
                         print(
                             "数据表 {main_name} 不存在外键 {additional_name} 的值 {data_now} ,插入数据失败".format(main_name=main_name, additional_name=additional_name, data_now=data_now))
-                    else:
-                        key = 1
+                        key=0
+                 
                 else:
                     print("数据表 {main_name} 不存在外键 {additional_name} ,插入数据失败".format(
                         main_name=main_name, additional_name=additional_name))
@@ -574,25 +599,19 @@ class Database:
 
         return key, i-1
 
-    def is_sure_name_by_table_ID(self, main_name, additional_name):
-        # 判断当前数据库ID下的数据库内是否已经存在当前数据表
-        # 检查第0列是否存在和整数类型的account相等的值
-        column_index = 2  # 第0列的索引（从0开始）
-        # 检查第2列是否存在和整数类型的account相等的值
-        column_exists = self.dataframe_3.iloc[:,
-                                              column_index] == self.database_ID
-        if column_exists.any():
-            row_indices = column_exists[column_exists].index.tolist(
-            )
-            # 验证该行的第1个数是否是database_name
-            value_column_index = 1  # 第1列的索引（从0开始）
-            rows_with_value = self.dataframe_3.iloc[row_indices,
-                                                    value_column_index] == main_name
-            for i in range(len(rows_with_value.tolist())):
-                if (rows_with_value.tolist()[i] == True):
-                    self.table_ID = self.dataframe_3.iloc[row_indices[i], 0]
+    def is_sure_name_by_table_ID(self, main_name,additional_name):
+        file_name = "dbs/{}_{}/{}_{}/data.csv".format(self.database_ID,self.database_name,self.table_ID,main_name)
+        if os.path.isfile(file_name): 
+            data = []
+            with open(file_name, 'r') as file:
+                reader = csv.reader(file)
+                for row in reader:
+                    data.append(row)
+            for i in range(len(data[0])):
+                if (data[0][i] == additional_name):
                     return True
         return False
+        
 
     def create_table(self, small_strings):
         table_name = small_strings[2]
@@ -610,37 +629,6 @@ class Database:
         if (self.is_sure_table(id)):
             print("该数据表名称非法,创建数据表失败")
         else:
-            # try:
-            #     self.path = f'dbs/{self.database_ID}.xlsx'
-            #     self.wb = xw.Book(self.path)
-            #     self.config = self.wb.sheets["Sheet1"]
-            # except FileNotFoundError:
-            #     self.wb = xw.Book()
-            #     self.wb.save(self.path)
-            #     print(
-            #         f"已创建数据库: {self.database_name}: dbs/{self.database_ID}.xlsx")
-            #     # 将新数据添加到数据框的最后一行
-            #     self.dataframe_2.loc[len(self.dataframe_2)] = [
-            #         self.database_ID, self.database_name, self.account]
-            #     # 创建 ExcelWriter 对象
-            #     writer = pd.ExcelWriter(
-            #         './Metadata/Metadata_Database_Table.xlsx', engine='openpyxl')
-            #     # 将数据写入各个工作表
-            #     self.dataframe_1.to_excel(
-            #         writer, sheet_name='Sheet1', index=False)
-            #     self.dataframe_2.to_excel(
-            #         writer, sheet_name='Sheet2', index=False)
-            #     self.dataframe_3.to_excel(
-            #         writer, sheet_name='Sheet3', index=False)
-            #     # 保存 Excel 文件
-            #     writer._save()
-            #     writer.close()
-            # 创建一个数据表就是创建一个dbs/db_ID_db_name_/tb_ID_tb_name的文件夹，其中包含类型文件以及存储数据文件
-            folder_name = "dbs/{}_{}/{}_{}".format(
-                self.database_ID, self.database_name, id, table_name)
-            if not os.path.exists(folder_name):  # 如果文件夹不存在则创建
-                os.mkdir(folder_name)
-
             # type类型
             result = [["_name_", "_type_", "_check_", "_default_",
                        "_primary key_", "_unique_", "_not null_", "_foreign key_"]]
@@ -657,10 +645,29 @@ class Database:
                 # foreign key (CharID) references ChineseCharInfo(ID)
                 elif (small_strings[i] == "foreign" and small_strings[i+1] == "key"):
                     name = small_strings[i+3]
-                    for ii in range(len(result)):
-                        if (result[ii][0] == name):
-                            result[ii][7] = small_strings[i+6] + \
-                                "("+small_strings[i+8]+")"
+                    tb_name=small_strings[i+6]
+                    tb_data_name=small_strings[i+8]
+                    if(self.is_sure_table_by_database_ID(tb_name)):
+                        if(self.is_sure_name_by_table_ID(tb_name,tb_data_name)):
+                            key_key=0
+                            for ii in range(len(result)):
+                                if (result[ii][0] == name):
+                                    result[ii][7] = small_strings[i+6] + \
+                                        "("+small_strings[i+8]+")"
+                                    key_key=1
+                                    break
+                            if(not key_key):
+                                print("{name}数据不存在".format(name=name))
+                                return
+                        else:
+                            print("数据表 {main_name} 不存在外键 {additional_name} ,创建数据表{table_name}失败".format(
+                        main_name=tb_name, additional_name=tb_data_name,table_name=table_name))
+                            return
+                    else:
+                        print("数据表 {main_name} 不存在,创建数据表{table_name}失败".format(
+                        main_name=tb_name, table_name=table_name))
+                        return
+                       
                     i = i+10
                 elif (small_strings[i] == "not" and small_strings[i+1] == "null"):
                     for ii in range(len(result)):
@@ -672,6 +679,12 @@ class Database:
                         if (result[ii][0] == name):
                             result[ii][5] = True
                     i = i+1
+                elif (small_strings[i] == "default"):
+                    data = small_strings[i+1]
+                    for ii in range(len(result)):
+                        if (result[ii][0] == name):
+                            result[ii][3] = data
+                    i = i+2
                 # age INT CHECK (age >= 0 AND age <= 150)
                 elif (small_strings[i] == "check"):
                     q = i+2
@@ -686,47 +699,33 @@ class Database:
                 elif (small_strings[i] != ')' and small_strings[i] != '('):
                     name = small_strings[i]
                     type = small_strings[i+1]
-                    # id INT NOT NULL
-                    if (i+3 < len(small_strings) and small_strings[i+2] == "not" and small_strings[i+3] == "null"):
-                        # name VARCHAR NOT NULL UNIQUE
-                        if (i+4 < len(small_strings) and small_strings[i+4] == "unique"):
-                            r = [name, type, "", "", False, True, True, ""]
-                            result.append(r)
-                            i = i+5
-                        else:
-                            r = [name, type, "", "", False, False, True, ""]
-                            result.append(r)
-                            i = i+4
-                     # id INT UNIQUE
-                    elif (i+1 < len(small_strings) and small_strings[i+1] == "unique"):
-                        # name VARCHAR UNIQUE NOT NULL
-                        if (i+4 < len(small_strings) and small_strings[i+3] == "not" and small_strings[i+4] == "null"):
-                            r = [name, type, "", "", False, True, True, ""]
-                            result.append(r)
-                            i = i+2
-                        else:
-                            r = [name, type, "", "", False, True, False, ""]
-                            result.append(r)
-                            i = i+2
-
+                    if(self.is_sure_key(type)!=2):
+                        print("数据类型错误")
+                        return       
+                    # id char(num)
+                    if (type == "char"):
+                        num = small_strings[i+3]
+                        type = type+"_"+num
+                        r = [name, type, "", "", False, False, False, ""]
+                        result.append(r)
+                        i = i+5
                     else:
-                        # id char(num)
-                        if (type == "char"):
-                            num = small_strings[i+3]
-                            type = type+"_"+num
-                            r = [name, type, "", "", False, False, False, ""]
-                            result.append(r)
-                            i = i+5
-                        else:
-                            r = [name, type, "", "", False, False, False, ""]
-                            result.append(r)
-                            i = i+2
+                        r = [name, type, "", "", False, False, False, ""]
+                        result.append(r)
+                        i = i+2
                 else:
                     if (small_strings[i] == "(" or small_strings[i] == ")"):
                         i = i+1
                     else:
                         print("您输入的指令错误")
                         break
+                    
+            # 创建一个数据表就是创建一个dbs/db_ID_db_name_/tb_ID_tb_name的文件夹，其中包含类型文件以及存储数据文件
+            folder_name = "dbs/{}_{}/{}_{}".format(
+                self.database_ID, self.database_name, id, table_name)
+            if not os.path.exists(folder_name):  # 如果文件夹不存在则创建
+                os.mkdir(folder_name)
+                
             # 创建一个数据表就是创建一个dbs/db_ID_db_name_/tb_ID_tb_name/type.csv的文件夹，其中包含类型
             # 打开CSV文件并以追加模式写入数据
             file_name = "dbs/{}_{}/{}_{}/type.csv".format(
