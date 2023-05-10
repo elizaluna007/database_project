@@ -372,36 +372,44 @@ class Database:
             result[n] = data_insert_data[i]
 
         # 判断not null
-        b = self.check_not_null(result, data_type)  # 判断是否为空
-        key = key and b
-        #默认值赋值
-        result=self.check_default(result, data_type)
-
+        key = key and self.check_not_null(result, data_type)
+        # 判断primary key
+        key = key and self.check_primary_key(result, data_type)
+        # 默认值赋值
+        result = self.check_default(result, data_type)
         result = [result]
         if (key):
             with open(file_name_data, 'a', newline='') as file:
                 writer = csv.writer(file)
                 writer.writerows(result)
-            result=result[0]
-            print("成功插入数据",result)
-        else:
-            print("数据有误")
-            
+            result = result[0]
+            print("成功插入数据", result)
+
     def check_default(self, result, data_type):
         for i in range(len(data_type[1:])):
             if (data_type[i+1][3] != ""):
-                if(result[i]==""):
+                if (result[i] == ""):
                     result[i] = data_type[i+1][3]
         return result
-                
+
     def check_not_null(self, result, data_type):
         for i in range(len(data_type[1:])):
             if (data_type[i+1][6] == "True"):
-                if(result[i]==""):
+                if (result[i] == ""):
+                    print("not null数据 {} 为空,插入数据失败".format(data_type[i+1][0]))
                     return False
         return True
-    # 检查类型与数值是否匹配
 
+    def check_primary_key(self, result, data_type):
+        for i in range(len(data_type[1:])):
+            if (data_type[i+1][4] == "True"):
+                if (result[i] == ""):
+                    print("primary key数据 {} 为空,插入数据失败".format(
+                        data_type[i+1][0]))
+                    return False
+        return True
+
+    # 检查类型与数值是否匹配
     def check(self, type, data):
         # num类型的值的范围在type文件夹下的num.json中，对其进行检查
         if (type == "tinyint"):
@@ -533,33 +541,39 @@ class Database:
         if (key_key == 0):
             key = 0
             print("属性名 {name_now} 不存在,插入数据失败".format(name_now=name_now))
+            return key, i-1
 
         # type
         if (self.check(type[i][1], data_now) == False):
             key = 0
             print("数据类型不匹配,插入数据失败")
+            return key, i-1
+
         if (type[:4] == "char"):
             num = int(type[5:])
             if (len(data_now) != num):
                 key = 0
                 print("数据类型不匹配,插入数据失败")
+                return key, i-1
 
         # check
         # if (type[i][2] != ""):
-            #todo
+            # todo
 
         # primary key
-        if (type[i][4] == True):
+        if (type[i][4] == "True"):
             for j in data:
                 if (j[i-1] == data_now):
                     key = 0
                     print("{data_now}已存在,插入数据失败".format(data_now=data_now))
+                    return key, i-1
         # unique
-        if (type[i][5] == True):
+        if (type[i][5] == "True"):
             for j in data:
                 if (j[i-1] == data_now):
                     key = 0
                     print("{data_now}已存在,插入数据失败".format(data_now=data_now))
+                    return key, i-1
         # foreign key
         if (type[i][7] != ""):
             # 使用正则表达式提取主要名称和附加名称
@@ -587,21 +601,24 @@ class Database:
                     if (key_key == 0):
                         print(
                             "数据表 {main_name} 不存在外键 {additional_name} 的值 {data_now} ,插入数据失败".format(main_name=main_name, additional_name=additional_name, data_now=data_now))
-                        key=0
-                 
+                        key = 0
+                        return key, i-1
+
                 else:
                     print("数据表 {main_name} 不存在外键 {additional_name} ,插入数据失败".format(
                         main_name=main_name, additional_name=additional_name))
                     key = 0
+                    return key, i-1
             else:
                 print("数据表 {main_name} 不存在,插入数据失败".format(main_name=main_name))
                 key = 0
-
+                return key, i-1
         return key, i-1
 
-    def is_sure_name_by_table_ID(self, main_name,additional_name):
-        file_name = "dbs/{}_{}/{}_{}/data.csv".format(self.database_ID,self.database_name,self.table_ID,main_name)
-        if os.path.isfile(file_name): 
+    def is_sure_name_by_table_ID(self, main_name, additional_name):
+        file_name = "dbs/{}_{}/{}_{}/data.csv".format(
+            self.database_ID, self.database_name, self.table_ID, main_name)
+        if os.path.isfile(file_name):
             data = []
             with open(file_name, 'r') as file:
                 reader = csv.reader(file)
@@ -611,7 +628,6 @@ class Database:
                 if (data[0][i] == additional_name):
                     return True
         return False
-        
 
     def create_table(self, small_strings):
         table_name = small_strings[2]
@@ -645,29 +661,29 @@ class Database:
                 # foreign key (CharID) references ChineseCharInfo(ID)
                 elif (small_strings[i] == "foreign" and small_strings[i+1] == "key"):
                     name = small_strings[i+3]
-                    tb_name=small_strings[i+6]
-                    tb_data_name=small_strings[i+8]
-                    if(self.is_sure_table_by_database_ID(tb_name)):
-                        if(self.is_sure_name_by_table_ID(tb_name,tb_data_name)):
-                            key_key=0
+                    tb_name = small_strings[i+6]
+                    tb_data_name = small_strings[i+8]
+                    if (self.is_sure_table_by_database_ID(tb_name)):
+                        if (self.is_sure_name_by_table_ID(tb_name, tb_data_name)):
+                            key_key = 0
                             for ii in range(len(result)):
                                 if (result[ii][0] == name):
                                     result[ii][7] = small_strings[i+6] + \
                                         "("+small_strings[i+8]+")"
-                                    key_key=1
+                                    key_key = 1
                                     break
-                            if(not key_key):
+                            if (not key_key):
                                 print("{name}数据不存在".format(name=name))
                                 return
                         else:
                             print("数据表 {main_name} 不存在外键 {additional_name} ,创建数据表{table_name}失败".format(
-                        main_name=tb_name, additional_name=tb_data_name,table_name=table_name))
+                                main_name=tb_name, additional_name=tb_data_name, table_name=table_name))
                             return
                     else:
                         print("数据表 {main_name} 不存在,创建数据表{table_name}失败".format(
-                        main_name=tb_name, table_name=table_name))
+                            main_name=tb_name, table_name=table_name))
                         return
-                       
+
                     i = i+10
                 elif (small_strings[i] == "not" and small_strings[i+1] == "null"):
                     for ii in range(len(result)):
@@ -699,9 +715,9 @@ class Database:
                 elif (small_strings[i] != ')' and small_strings[i] != '('):
                     name = small_strings[i]
                     type = small_strings[i+1]
-                    if(self.is_sure_key(type)!=2):
+                    if (self.is_sure_key(type) != 2):
                         print("数据类型错误")
-                        return       
+                        return
                     # id char(num)
                     if (type == "char"):
                         num = small_strings[i+3]
@@ -719,13 +735,13 @@ class Database:
                     else:
                         print("您输入的指令错误")
                         break
-                    
+
             # 创建一个数据表就是创建一个dbs/db_ID_db_name_/tb_ID_tb_name的文件夹，其中包含类型文件以及存储数据文件
             folder_name = "dbs/{}_{}/{}_{}".format(
                 self.database_ID, self.database_name, id, table_name)
             if not os.path.exists(folder_name):  # 如果文件夹不存在则创建
                 os.mkdir(folder_name)
-                
+
             # 创建一个数据表就是创建一个dbs/db_ID_db_name_/tb_ID_tb_name/type.csv的文件夹，其中包含类型
             # 打开CSV文件并以追加模式写入数据
             file_name = "dbs/{}_{}/{}_{}/type.csv".format(
