@@ -20,11 +20,11 @@ CQU 数据库项目之数据库 SQL 引擎设计与模拟实现
 
 ##### create table table_name({name type [not null] [unique]}{foreign key(name)references table_name2(name2) }[primary key(name)])
 
-##### 符号[...]表示方括号内包含的为可选项；符号{...}表示花括号内包含的为可重复 0 次或多次的项；
+##### 符号[...]表示方括号内包含的为可选项；符号{...}表示花括号内包含的为可重复 0 次或多次的项；括号内不同的数据之间用,间隔
 
 ##### 添加用例（完成）
 
-##### insert into table_name({name})values({data})
+##### insert into table_name(name1,name2,……)values(data1,data2,……)
 
 ###### 数据类型设计参考https://github.com/haowang-cqu/SQLittle.git
 
