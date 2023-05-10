@@ -24,6 +24,8 @@ CQU 数据库项目之数据库 SQL 引擎设计与模拟实现
 
 ##### 添加用例（完成）
 
+##### insert into table_name({name})values({data})
+
 ###### 数据类型设计参考https://github.com/haowang-cqu/SQLittle.git
 
 ```
