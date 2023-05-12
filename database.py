@@ -301,9 +301,137 @@ class Database:
             self.insert_data(small_strings)
 
         # --------------u should add the other instruction here--------------------------------
-
+        # 查看当前在使用的数据库
+        elif (small_strings[0] == "select" and small_strings[1] == "database"):
+            print("current database: ID ",self.database_ID,"  name ",self.database_name);
+        # 查看数据表结构
+        elif (small_strings[0] == "select" and small_strings[1] == "type"):
+            self.selecttable_data(small_strings)
+        # 查询数据表 select * from 数据表名 where id = 001
+        elif (small_strings[0] == "select" and small_strings[1] == "*" and small_strings[4] == "where"):
+            self.select2_data(small_strings)
+        # 查看数据表全部数据
+        elif (small_strings[0] == "select" and small_strings[1] == "*"):
+            self.selectall_data(small_strings)
+        # eg: select name from student where id = 001 ;
+        elif (small_strings[0] == "select" and small_strings[2] == "from" and len(small_strings)>5):
+            self.select1_data(small_strings)
+        # eg: select name from student ;
+        elif (small_strings[0] == "select" and small_strings[2] == "from"):
+            self.select3_data(small_strings)
         else:
             print("该指令非法")
+
+    def select1_data(self, small_strings):
+        attri_name = small_strings[1]
+        table_name = small_strings[3]
+        select_key = small_strings[5]
+        select_value = small_strings[7]
+        if (self.is_sure_table_by_database_ID(table_name)):
+            self.select1_dt(attri_name,table_name,select_key,select_value,small_strings)
+        else:
+            print("该数据表不存在,查看数据表失败")
+
+    def select1_dt(self,attri_name,table_name,select_key,select_value, small_strings):
+        file_name_type = "dbs/{}_{}/{}_{}/data.csv".format(
+            self.database_ID, self.database_name, self.table_ID, table_name)
+        # 打开CSV文件并读取数据 # select name from student where id = 001 ;
+        data = []
+        with open(file_name_type, 'r') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                data.append(row)
+        t=0
+        t1=0
+        for i in range(len(data[0])):
+            if data[0][i]==select_key:
+                t=i
+            if data[0][i]==attri_name:
+                t1=i
+        for i in range(1,len(data)):
+            if(data[i][t]==select_value):
+                print(data[i][t1])
+    def select2_data(self, small_strings):
+        table_name = small_strings[3]
+        select_key = small_strings[5]
+        select_value = small_strings[7]
+        # print(select_key," ",select_value)
+        if (self.is_sure_table_by_database_ID(table_name)):
+            self.select2_dt(table_name,select_key,select_value,small_strings)
+        else:
+            print("该数据表不存在,查看数据表失败")
+
+    def select2_dt(self, table_name,select_key,select_value, small_strings):
+        file_name_type = "dbs/{}_{}/{}_{}/data.csv".format(
+            self.database_ID, self.database_name, self.table_ID, table_name)
+        # 打开CSV文件并读取数据
+        data = []
+        with open(file_name_type, 'r') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                data.append(row)
+        t=0
+        for i in range(len(data[0])):
+            if data[0][i]==select_key:
+                t=i
+                break
+        for i in range(1,len(data)):
+            if(data[i][t]==select_value):
+                print(data[i])
+    def select3_data(self, small_strings):
+        attri_name = small_strings[1]
+        table_name = small_strings[3]
+        if (self.is_sure_table_by_database_ID(table_name)):
+            self.select3_dt(attri_name,table_name,small_strings)
+        else:
+            print("该数据表不存在,查看数据表失败")
+
+    def select3_dt(self,attri_name,table_name,small_strings):
+        file_name_type = "dbs/{}_{}/{}_{}/data.csv".format(
+            self.database_ID, self.database_name, self.table_ID, table_name)
+        # 打开CSV文件并读取数据 # select name from student ;
+        data = []
+        with open(file_name_type, 'r') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                data.append(row)
+        t1=0
+        for i in range(len(data[0])):
+            if data[0][i]==attri_name:
+                t1=i
+        for i in range(1,len(data)):
+                print(data[i][t1])
+    def selecttable_data(self, small_strings):
+        table_name = small_strings[3]
+        if (self.is_sure_table_by_database_ID(table_name)):
+            self.selecttable_dt(table_name, small_strings)
+        else:
+            print("该数据表不存在,查看数据表失败")
+
+    def selecttable_dt(self, table_name, small_strings):
+        file_name_type = "dbs/{}_{}/{}_{}/type.csv".format(
+            self.database_ID, self.database_name, self.table_ID, table_name)
+        # 打开CSV文件并读取数据
+        with open(file_name_type, 'r') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                print(row)
+
+    def selectall_data(self, small_strings):
+        table_name = small_strings[3]
+        if (self.is_sure_table_by_database_ID(table_name)):
+            self.selectall_dt(table_name, small_strings)
+        else:
+            print("该数据表不存在,查看数据表失败")
+
+    def selectall_dt(self, table_name, small_strings):
+        file_name_data = "dbs/{}_{}/{}_{}/data.csv".format(
+            self.database_ID, self.database_name, self.table_ID, table_name)
+        # 打开CSV文件并读取数据
+        with open(file_name_data, 'r') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                print(row)
 
     def is_sure_key(self, str):
         metadata = ['_admin_ID_', '_admin_name_', '_password_', '_database_ID_',
