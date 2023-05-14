@@ -5,6 +5,7 @@ import os
 import csv
 import json
 from datetime import datetime
+import shutil
 
 
 def split_string_with_delimiters(string):
@@ -256,7 +257,7 @@ class Database:
             self.dataframe_2.to_excel(writer, sheet_name='Sheet2', index=False)
             self.dataframe_3.to_excel(writer, sheet_name='Sheet3', index=False)
             # 保存 Excel 文件
-            writer._save()
+            writer.save()
             writer.close()
 
     def instruction(self, input_string):
@@ -319,6 +320,18 @@ class Database:
         # eg: select name from student ;
         elif (small_strings[0] == "select" and small_strings[2] == "from"):
             self.select3_data(small_strings)
+        # 删除数据 delete from 数据表名 where id = 001
+        elif (small_strings[0] == "delete" and small_strings[1] == "from"):
+            self.delete_data(small_strings)
+        # 删除数据表 drop table 数据表名
+        elif (small_strings[0] == "drop" and small_strings[1] == "table"):
+            self.drop_table(small_strings)
+        # 删除数据库 drop database 数据库名
+        elif (small_strings[0] == "drop" and small_strings[1] == "database"):
+            self.drop_database(small_strings)
+        # 修改数据 update 数据表名 set name = '小明' where id = 001
+        elif (small_strings[0] == "update" and small_strings[2] == "set"):
+            self.update_data(small_strings)        
         else:
             print("该指令非法")
 
@@ -905,7 +918,7 @@ class Database:
             self.dataframe_3.to_excel(
                 writer, sheet_name='Sheet3', index=False)
             # 保存 Excel 文件
-            writer._save()
+            writer.save()
             writer.close()
 
     def is_sure_table(self, id):
@@ -971,7 +984,7 @@ class Database:
             #     self.dataframe_3.to_excel(
             #         writer, sheet_name='Sheet3', index=False)
             #     # 保存 Excel 文件
-            #     writer._save()
+            #     writer.save()
             #     writer.close()
 
             # 创建一个数据库就是创建一个dbs/db_ID_db_name的文件夹
@@ -995,7 +1008,7 @@ class Database:
             self.dataframe_3.to_excel(
                 writer, sheet_name='Sheet3', index=False)
             # 保存 Excel 文件
-            writer._save()
+            writer.save()
             writer.close()
 
     def is_sure_database_name_by_account(self):
@@ -1060,6 +1073,182 @@ class Database:
                 print(f"您选择的数据库 {self.database_name} 不存在")
         else:
             print(f"您选择的数据库 {self.database_name} 不存在")
+
+
+    def delete_data(self, small_strings):
+        # delete from student where id = 001 ;
+        table_name = small_strings[2]
+        select_key = small_strings[4]
+        select_value = small_strings[6]
+        if (self.is_sure_table_by_database_ID(table_name)):
+            self.delete_dt(table_name,select_key,select_value,small_strings)
+        else:
+            print("该数据表不存在,查看数据表失败")
+
+    def delete_dt(self,table_name,select_key,select_value, small_strings):
+        file_name_type = "dbs/{}_{}/{}_{}/data.csv".format(
+            self.database_ID, self.database_name, self.table_ID, table_name)
+        data = []
+        with open(file_name_type, 'r') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                data.append(row)
+        t=0
+        delete_index = 0
+        for i in range(len(data[0])):
+            if data[0][i]==select_key:
+                t=i
+        for i in range(1,len(data)):
+            if(data[i][t]==select_value):
+                delete_index=i
+        # 删除对应的行
+        data.pop(delete_index)
+        # 保存修改后的文件
+        with open(file_name_type, 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerows(data)
+        print("删除成功")
+
+
+    # 删除数据表：drop_table
+    def drop_table(self, small_strings):
+        # drop table student ;
+        table_name = small_strings[2]
+        if (self.is_sure_table_by_database_ID(table_name)):
+            self.drop_tb(table_name, small_strings)
+        else:
+            print("该数据表不存在,删除数据表失败")
+
+    def drop_tb(self, table_name, small_strings):
+        file_name_type = "dbs/{}_{}/{}_{}/".format(
+            self.database_ID, self.database_name, self.table_ID, table_name)
+        # 使用os库来删除文件
+        import os
+        try:
+            shutil.rmtree(file_name_type)
+            # 删除./Metadata/Metadata_Database_Table.xlsx'中的数据
+            # 读取表格
+            # 找到要删除的行的索引
+            index = self.dataframe_3[self.dataframe_3['table_name'] == table_name].index
+            # 删除对应的行
+            self.dataframe_3.drop(index=index, inplace=True)
+            # 创建 ExcelWriter 对象
+            writer = pd.ExcelWriter(
+                './Metadata/Metadata_Database_Table.xlsx', engine='openpyxl')
+            # 将数据写入各个工作表
+            self.dataframe_1.to_excel(
+                writer, sheet_name='Sheet1', index=False)
+            self.dataframe_2.to_excel(
+                writer, sheet_name='Sheet2', index=False)
+            self.dataframe_3.to_excel(
+                writer, sheet_name='Sheet3', index=False)
+            # 保存 Excel 文件
+            writer.save()
+            writer.close()
+            print("删除数据表成功")
+        except FileNotFoundError:
+            print("该数据表不存在")
+
+
+    def is_sure_database_by_account_ID(self, database_name):
+        # 检查第0列是否存在和整数类型的account相等的值
+        column_index = 2
+        # 检查第2列是否存在和整数类型的account相等的值
+        column_exists = self.dataframe_2.iloc[:,
+                                                column_index] == self.account
+        if column_exists.any():
+            row_indices = column_exists[column_exists].index.tolist()
+            # 验证该行的第1个数是否是database_name
+            value_column_index = 1
+            rows_with_value = self.dataframe_2.iloc[row_indices,
+                                                    value_column_index] == database_name
+            for i in range(len(rows_with_value.tolist())):
+                if (rows_with_value.tolist()[i] == True):
+                    return True
+        return False
+    
+    # 删除数据库：drop_database
+    def drop_database(self, small_strings):
+        # drop database school ;
+        database_name = small_strings[2]
+        if (self.is_sure_database_by_account_ID(database_name)):
+            self.drop_db(database_name, small_strings)
+        else:
+            print("该数据库不存在，删除数据库失败")
+
+    def drop_db(self, database_name, small_strings):
+        file_name_type = "dbs/{}_{}/".format(
+            self.database_ID, database_name)
+        # 使用shutil库来删除文件夹
+        import shutil
+        try:
+            shutil.rmtree(file_name_type)
+            # 删除./Metadata/Metadata_Database_Table.xlsx'中的数据
+            # 读取表格
+            # 找到要删除的行的索引
+            index = self.dataframe_2[self.dataframe_2['database_name'] == database_name].index
+            # 删除对应的行
+            self.dataframe_2.drop(index=index, inplace=True)
+            # 创建 ExcelWriter 对象
+            writer = pd.ExcelWriter(
+                './Metadata/Metadata_Database_Table.xlsx', engine='openpyxl')
+            # 将数据写入各个工作表
+            self.dataframe_1.to_excel(
+                writer, sheet_name='Sheet1', index=False)
+            self.dataframe_2.to_excel(
+                writer, sheet_name='Sheet2', index=False)
+            self.dataframe_3.to_excel(
+                writer, sheet_name='Sheet3', index=False)
+            # 保存 Excel 文件
+            writer.save()
+            writer.close()
+            print("删除数据库成功")
+        except FileNotFoundError:
+            print("该数据库不存在")
+
+   # 修改数据：update_data
+    def update_data(self, small_strings):
+        # update student set name = 'Tom' where id = '001' ;
+        table_name = small_strings[1]
+        update_key = small_strings[3]
+        update_value = small_strings[5]
+        where_key = small_strings[7]
+        where_value = small_strings[9]
+        if (self.is_sure_table_by_database_ID(table_name)):
+            self.update_dt(table_name, update_key,
+                        update_value, where_key, where_value, small_strings)
+        else:
+            print("该数据表不存在，修改数据失败")
+
+    def update_dt(self, table_name, update_key,
+                update_value, where_key, where_value, small_strings):
+        file_name_type = "dbs/{}_{}/{}_{}/data.csv".format(
+            self.database_ID, self.database_name, self.table_ID, table_name)
+        # 打开CSV文件并读取数据 # select name from student where id = 001 ;
+        data = []
+        with open(file_name_type, 'r') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                data.append(row)
+        t=0
+        t1=0
+        for i in range(len(data[0])):
+            if data[0][i]==where_key:
+                t=i
+            if data[0][i]==update_key:
+                t1=i
+        for i in range(1,len(data)):
+            if(data[i][t]==where_value):
+                data[i][t1]=update_value
+        # save
+        try:
+            with open(file_name_type, 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerows(data)
+            print("修改成功")
+        except FileNotFoundError:
+            print("该数据表不存在")
+
 
 
 # db = Database()
