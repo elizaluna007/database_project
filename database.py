@@ -7,6 +7,246 @@ import json
 from datetime import datetime
 import shutil
 
+import time
+# B+树索引
+# 二分法，根据边界点不同分为两种
+def erfen1(a, x, l=0, r=None):
+    if r is None: r = len(a)
+    while l< r:
+        mid = (l + r) // 2
+        if x < a[mid]: r = mid
+        else: l = mid + 1
+    return l
+
+def erfen2(a, x, l=0, h=None):
+    if h is None: h = len(a)
+    while l < h:
+        mid = (l + h) // 2
+        if a[mid] < x: l = mid + 1
+        else: h = mid
+    return l
+
+# 定义键值对，以及键值对相关的操作
+class key_value(object):
+    __slots__ = ('key', 'value')
+    def __init__(self, key, value):
+        self.key = key
+        self.value = value
+    def __str__(self):
+        return str((self.key, self.value))
+    def __lt__(self, other):  # 小
+        if isinstance(other, key_value):
+            if self.key < other.key: return True
+            else: return False
+        else:
+            if self.key < other: return True
+            else: return False
+    def __gt__(self, other):  # 大
+        if isinstance(other, key_value):
+            if self.key > other.key: return True
+            else: return False
+        else:
+            if self.key > other: return True
+            else: return False
+    def __eq__(self, other):  # 相等
+        if isinstance(other, key_value): # 判断变量类型 确定与索引键值对是同一类型
+            if self.key == other.key: return True
+            else: return False
+        else:
+            if self.key == other: return True
+            else: return False
+    def __ne__(self, other): # 不等
+        if isinstance(other, key_value):
+            if self.key != other.key: return True
+            else: return False
+        else:
+            if self.key != other: return True
+            else: return False
+
+# 树内部结点
+class tree_node(object):
+    def __init__(self, M):
+        self._M = M
+        self.childlist = []  # 是index节点，保存tree_node节点信息 是leaf节点， 保存 tree_leaf的信息
+        self.idexlist = []  # 保存 索引节点
+        self.par = None
+    def isleaf(self):  return False
+    def isfull(self): return len(self.idexlist) >= self.M - 1
+    def isempty(self): return len(self.idexlist) <= (self.M + 1) // 2 - 1
+    @property
+    def M(self): return self._M
+
+# 树叶节点
+class tree_leaf(object):
+    def __init__(self, L):
+        self._L = L
+        self.leaflist = []  # 叶节点列表
+        self.bro = None
+        self.dad = None
+    def isleaf(self): return True
+    def isfull(self): return len(self.leaflist) > self.L   # 个数超过了阶数，上溢
+    def islack(self): return len(self.leaflist) <= (self.L + 1) // 2  # 不到个数最小值，下溢
+    @property
+    def L(self): return self._L
+
+# 构建B+树
+class Bplus_tree(object):
+    def __init__(self, M, L):  # M为度。L为填充因子
+        self._M = M
+        self._L = L
+        self._root = tree_leaf(L)
+        self._leaf = self._root
+    @property
+    def M(self): return self._M
+    @property
+    def L(self): return self._L
+    def leaf(self): return self._leaf
+    def insert(self, key_value):  # 插入索引
+        def split_node(n1):  # 内部节点分裂
+            mid = self.M // 2
+            new_node = tree_node(self.M)
+            new_node.idexlist = n1.idexlist[mid:]
+            new_node.childlist = n1.childlist[mid:]
+            new_node.par = n1.dad
+            for c in new_node.childlist:
+                c.dad = new_node
+            if n1.dad is None: # n1为根节点
+                new_root = tree_node(self.M)
+                new_root.idexlist = [n1.idexlist[mid - 1]]
+                new_root.childlist = [n1, new_node]
+                n1.dad = new_node.par = new_root
+                self._root = new_root
+            else:
+                i = n1.dad.childlist.index(n1)
+                n1.dad.idexlist.insert(i, n1.idexlist[mid - 1])
+                n1.dad.childlist.insert(i + 1, new_node)
+            n1.idexlist = n1.idexlist[:mid - 1]
+            n1.childlist = n1.childlist[:mid]
+            return n1.dad
+
+        def split_leaf(n2):  # 叶节点分裂（插入后上溢）
+            m = (self.L + 1) // 2
+            new_leaf = tree_leaf(self.L)
+            new_leaf.leaflist = n2.leaflist[m:] # 新leaf结点，存原leaf的右边
+            if n2.dad == None:  # n2为根节点
+                new_root = tree_node(self.M)  # 新node结点，存mid和max
+                new_root.idexlist = [n2.leaflist[m].key]
+                new_root.childlist = [n2, new_leaf]
+                n2.dad = new_leaf.dad = new_root  # 新旧leaf结点的父节点指向新node
+                self._root = new_root
+            else:  # n2有父结点
+                i = n2.dad.childlist.index(n2)
+                n2.dad.idexlist.insert(i, n2.leaflist[m].key) # 向上更新父节点键
+                n2.dad.childlist.insert(i + 1, new_leaf)
+                new_leaf.dad = n2.dad
+            n2.leaflist = n2.leaflist[:m]  # 原leaf的左边
+            n2.bro = new_leaf # leaf结点之间的指针
+        def insert_node(n):
+            if not n.isleaf():  # 当前为内部节点
+                if n.isfull():  # 结点中键个数超过阶数，需要将该结点进行分裂
+                    insert_node(split_node(n))
+                else:  # 没满
+                    p = erfen1(n.idexlist, key_value)
+                    insert_node(n.childlist[p])
+            else:  # 从叶子节点开始插入
+                p = erfen1(n.leaflist, key_value) # 正常插入，先用二分法查找插入位置，然后直接插入
+                n.leaflist.insert(p, key_value)
+                if n.isfull():  # 如果插入后满了，就需要分裂
+                    split_leaf(n)
+                else:
+                    return
+        insert_node(self._root)
+
+    def search(self, key=None): # 根节点开始，向下逐层使用二分查找，最终找到匹配的叶子节点
+        re = []
+        node = self._root
+        def search_key(node, key):
+            if node.isleaf():
+                pos = erfen2(node.leaflist, key)
+                return (pos, node)
+            else:
+                pos = erfen1(node.idexlist, key)
+                return search_key(node.childlist[pos], key) # 逐层递归
+        posi, knode = search_key(node, key)
+        if knode.leaflist[posi] == key:
+            re.append(knode.leaflist[posi])
+            return re
+        else:
+            return re
+    def delete(self, key_value): # 删除索引
+        def tran_l2r(n, i): # 将左边的转移过来
+            # 将i的最后一个节点追加到i+1的第一个节点
+            if not n.childlist[i].isleaf():
+                n.childlist[i + 1].childlist.insert(0, n.childlist[i].childlist[-1])
+                n.childlist[i].childlist[-1].dad = n.childlist[i + 1]
+                n.childlist[i + 1].idexlist.insert(0, n.idexlist[i])
+                n.idexlist[i] = n.childlist[i].idexlist[-1]
+                n.childlist[i].childlist.pop()
+                n.childlist[i].idexlist.pop()
+            else:
+                n.childlist[i + 1].leaflist.insert(0, n.childlist[i].leaflist[-1])
+                n.childlist[i].leaflist.pop()
+                n.idexlist[i] = n.childlist[i + 1].leaflist[0].key
+        def tran_r2l(n, i): # 将右边的转移过来
+            # 将i+1的第一个节点追加到i的最后一个节点
+            if not n.childlist[i].isleaf():
+                n.childlist[i].childlist.append(n.childlist[i + 1].childlist[0])
+                n.childlist[i + 1].childlist[0].dad = n.childlist[i]
+                n.childlist[i].idexlist.append(n.idexlist[i])
+                n.idexlist[i] = n.childlist[i + 1].idexlist[0]
+                n.childlist[i + 1].childlist.remove(n.childlist[i + 1].childlist[0])
+                n.childlist[i + 1].idexlist.remove(n.childlist[i + 1].idexlist[0])
+            else:
+                n.childlist[i].leaflist.append(n.childlist[i + 1].leaflist[0])
+                n.childlist[i + 1].leaflist.remove(n.childlist[i + 1].leaflist[0])
+                n.idexlist[i] = n.childlist[i + 1].leaflist[0].key
+        def merge(n, i): # 结点合并
+            if n.childlist[i].isleaf():
+                n.childlist[i].leaflist = n.childlist[i].leaflist + n.childlist[i + 1].leaflist
+                n.childlist[i].bro = n.childlist[i + 1].bro
+            else:
+                n.childlist[i].idexlist = n.childlist[i].idexlist + [n.idexlist[i]] + n.childlist[i + 1].idexlist
+                n.childlist[i].childlist = n.childlist[i].childlist + n.childlist[i + 1].childlist
+            n.childlist.remove(n.childlist[i + 1])
+            n.idexlist.remove(n.idexlist[i])
+            if n.idexlist == []:
+                n.childlist[0].dad = None
+                self._root = n.childlist[0]
+                del n
+                return self._root
+            else:
+                return n
+        def del_node(n, kv): # 删除可能会触发下溢出，即节点键个数<(mid+1)/2
+            if not n.isleaf(): # 内部节点
+                p = erfen1(n.idexlist, kv)
+                if p == len(n.idexlist): # 是最大值，就需要从子结点重新找最大值
+                    if not n.childlist[p].islack(): # 不产生下溢，直接删除
+                        return del_node(n.childlist[p], kv)
+                    elif not n.childlist[p - 1].islack(): # 产生下溢，删除后要修复，若兄弟节点富余，可以向对应富余的兄弟借键
+                        tran_l2r(n, p - 1) # 将左边的转移过来
+                        return del_node(n.childlist[p], kv)
+                    else: # 兄弟节点也不富余，则将兄弟节点与该节点合并，然后更新父节点
+                        return del_node(merge(n, p - 1), kv)
+                else:
+                    if not n.childlist[p].islack():
+                        return del_node(n.childlist[p], kv)
+                    elif not n.childlist[p + 1].islack():
+                        tran_r2l(n, p) # 将右边的转移过来，默认是转移右边的
+                        return del_node(n.childlist[p], kv)
+                    else:
+                        return del_node(merge(n, p), kv)
+            else:  # 叶结点直接删除即可
+                p = erfen2(n.leaflist, kv)
+                pp = n.leaflist[p]
+                if pp != kv:
+                    return -1
+                else:
+                    n.leaflist.remove(kv)
+                    return 0
+        del_node(self._root, key_value) # 自顶向下
+
+tree1 = Bplus_tree(4, 4)  # address
+tree2 = Bplus_tree(4, 4)  # student
 
 def split_string_with_delimiters(string):
     result = []
@@ -341,7 +581,9 @@ class Database:
         select_key = small_strings[5]
         select_value = small_strings[7]
         if (self.is_sure_table_by_database_ID(table_name)):
+            t = time.perf_counter()
             self.select1_dt(attri_name,table_name,select_key,select_value,small_strings)
+            print(f'time cost:{time.perf_counter() - t:.18f}s')
         else:
             print("该数据表不存在,查看数据表失败")
 
@@ -361,16 +603,29 @@ class Database:
                 t=i
             if data[0][i]==attri_name:
                 t1=i
+        # 无索引的查询
         for i in range(1,len(data)):
             if(data[i][t]==select_value):
                 print(data[i][t1])
+        # #有索引的查询
+        # if (table_name == "address"):
+        #     for kv in tree1.search(int(select_value)):
+        #         value = kv.value
+        #         print(data[value][t1])
+        # elif (table_name == "student"):
+        #     for kv in tree2.search(int(select_value)):
+        #         value = kv.value
+        #         print(data[value][t1])
+
     def select2_data(self, small_strings):
         table_name = small_strings[3]
         select_key = small_strings[5]
         select_value = small_strings[7]
         # print(select_key," ",select_value)
         if (self.is_sure_table_by_database_ID(table_name)):
+            t = time.perf_counter()
             self.select2_dt(table_name,select_key,select_value,small_strings)
+            print(f'time cost:{time.perf_counter() - t:.18f}s')
         else:
             print("该数据表不存在,查看数据表失败")
 
@@ -388,14 +643,26 @@ class Database:
             if data[0][i]==select_key:
                 t=i
                 break
+        # 无索引的查询
         for i in range(1,len(data)):
             if(data[i][t]==select_value):
                 print(data[i])
+        # # 有索引的查询
+        # if(table_name=="address"):
+        #     for kv in tree1.search(int(select_value)):
+        #         value=kv.value
+        #         print(data[value])
+        # elif(table_name=="student"):
+        #     for kv in tree2.search(int(select_value)):
+        #         value=kv.value
+        #         print(data[value])
     def select3_data(self, small_strings):
         attri_name = small_strings[1]
         table_name = small_strings[3]
         if (self.is_sure_table_by_database_ID(table_name)):
+            t = time.perf_counter()
             self.select3_dt(attri_name,table_name,small_strings)
+            print(f'time cost:{time.perf_counter() - t:.18f}s')
         else:
             print("该数据表不存在,查看数据表失败")
 
@@ -503,6 +770,16 @@ class Database:
                 key = 1
             else:
                 i = i+1
+
+        # 建立索引，key：id  value：行号
+        hang = len(data)
+        if (data_insert_name[0] == "id"):
+            if(table_name=="address"):
+                print("成功建立一条关于address表的索引：key ",int(data_insert_data[0]),"  value ",hang)
+                tree1.insert(key_value(int(data_insert_data[0]), hang))
+            elif(table_name == "student"):
+                print("成功建立一条关于student表的索引：key ",int(data_insert_data[0]),"  value ",hang)
+                tree2.insert(key_value(int(data_insert_data[0]), hang))
 
         result = ["" for i in range(len(data[0]))]
         key = 1
@@ -1098,9 +1375,30 @@ class Database:
         for i in range(len(data[0])):
             if data[0][i]==select_key:
                 t=i
-        for i in range(1,len(data)):
-            if(data[i][t]==select_value):
-                delete_index=i
+        # # 无索引删除
+        # for i in range(1,len(data)):
+        #     if(data[i][t]==select_value):
+        #         delete_index=i
+        # 通过索引查找后删除
+        if (table_name == "address"):
+            for kv in tree1.search(int(select_value)):
+                delete_index = kv.value
+        elif (table_name == "student"):
+            for kv in tree2.search(int(select_value)):
+                delete_index = kv.value
+        # 删除对应行的索引
+        if(table_name=="address"):
+            for kv in tree1.search(int(select_value)):
+                key=kv.key
+                value=kv.value
+                print("删除一条关于address表的索引：key ",key, "  value ",value)
+                tree1.delete(key_value(key, value))
+        elif(table_name=="student"):
+            for kv in tree2.search(int(select_value)):
+                key=kv.key
+                value=kv.value
+                print("删除一条关于student表的索引：key ", key, "  value ", value)
+                tree2.delete(key_value(key, value))
         # 删除对应的行
         data.pop(delete_index)
         # 保存修改后的文件
@@ -1215,8 +1513,10 @@ class Database:
         where_key = small_strings[7]
         where_value = small_strings[9]
         if (self.is_sure_table_by_database_ID(table_name)):
+            t = time.perf_counter()
             self.update_dt(table_name, update_key,
                         update_value, where_key, where_value, small_strings)
+            print(f'time cost:{time.perf_counter() - t:.18f}s')
         else:
             print("该数据表不存在，修改数据失败")
 
@@ -1237,9 +1537,19 @@ class Database:
                 t=i
             if data[0][i]==update_key:
                 t1=i
-        for i in range(1,len(data)):
-            if(data[i][t]==where_value):
-                data[i][t1]=update_value
+        # 无索引修改
+        # for i in range(1,len(data)):
+        #     if(data[i][t]==where_value):
+        #         data[i][t1]=update_value
+        # 通过索引查找后修改
+        if (table_name == "address"):
+            for kv in tree1.search(int(where_value)):
+                value = kv.value
+                data[value][t1]=update_value
+        elif (table_name == "student"):
+            for kv in tree2.search(int(where_value)):
+                value = kv.value
+                data[value][t1]=update_value
         # save
         try:
             with open(file_name_type, 'w', newline='') as file:
